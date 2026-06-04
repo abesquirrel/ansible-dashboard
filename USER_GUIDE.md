@@ -21,25 +21,47 @@ Welcome to **CTRL**, the web-based management dashboard for your Ansible infrast
 
 CTRL acts as an orchestrator that sits between system administrators and your **Ansible Control Node**. Instead of logging into the command line to run playbooks and manage inventory, CTRL provides a visual, multi-tenant interface.
 
-```
-                  +-----------------------------------+
-                  |           Web Browser             |
-                  |  (Dashboard, Terminal, Topology)  |
-                  +-----------------+-----------------+
-                                    |
-                          HTTP / WebSockets
-                                    v
-                  +-----------------------------------+
-                  |         CTRL Laravel App          |
-                  |     (Queues, DB, WS Server)       |
-                  +-----------------+-----------------+
-                                    |
-                               SSH / SFTP
-                                    v
-                  +-----------------------------------+
-                  |       Ansible Control Node        |
-                  |   (Playbooks, Inventories, CLI)   |
-                  +-----------------------------------+
+```mermaid
+graph TD
+    classDef browser fill:#2563eb,stroke:#3b82f6,stroke-width:2px,color:#fff;
+    classDef laravel fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff;
+    classDef storage fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff;
+    classDef controlNode fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff;
+
+    subgraph UserInterface["Client Browser"]
+        Client["Web UI (Blade + Alpine.js + xterm.js)"]:::browser
+    end
+
+    subgraph AppServer["Docker Host (CTRL Containers)"]
+        Apache["ansible-ctrl-app (Apache + PHP 8.4)"]:::laravel
+        Worker["ansible-ctrl-worker (Queue Worker)"]:::laravel
+        Scheduler["ansible-ctrl-scheduler"]:::laravel
+        Reverb["ansible-ctrl-reverb (WebSocket Server :8081)"]:::laravel
+        
+        DB[("ansible-ctrl-db (MariaDB 11.2)")]:::storage
+        Redis[("ansible-ctrl-redis (Cache/Queue)")]:::storage
+    end
+
+    subgraph TargetInfra["Ansible Environment"]
+        ControlNode["Ansible Control Node"]:::controlNode
+        ManagedHosts["Target Managed Hosts"]:::controlNode
+    end
+
+    %% Connections
+    Client -- "HTTP Requests (Port 8000)" --> Apache
+    Client -- "WebSocket Connection (Port 8081)" --> Reverb
+
+    Apache -- "Reads/Writes" --> DB
+    Apache -- "Checks Cache" --> Redis
+    Apache -- "Dispatches Jobs" --> Redis
+
+    Worker -- "Pops Jobs" --> Redis
+    Worker -- "Runs Ansible commands via SSH" --> ControlNode
+    Worker -- "Streams output chunks via Event" --> Reverb
+    
+    Scheduler -- "Triggers cron playbooks" --> Redis
+
+    ControlNode -- "Orchestrates tasks via SSH/WinRM" --> ManagedHosts
 ```
 
 ### Key Technical Aspects:
@@ -136,6 +158,37 @@ Upon clicking execute, you will be redirected to the **Job View**.
 * The console terminal is powered by **xterm.js** and displays ANSI-colored stdout in real-time.
 * You can watch the execution progress block-by-block.
 * **Abort Option**: If a playbook behaves unexpectedly, Admins and Operators can click **Abort Job** to send a termination signal (`SIGINT`/`SIGTERM`) to the underlying Ansible process on the Control Node, stopping it immediately.
+
+### Execution Sequence Workflow:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Admin/Operator (Browser)
+    participant App as Laravel Web App
+    participant Redis as Redis Queue
+    participant Worker as Laravel Queue Worker
+    participant Node as Ansible Control Node
+    participant Reverb as Laravel Reverb WS
+    participant UI as xterm.js Terminal (Browser)
+
+    User->>App: 1. Click "Execute Playbook" (w/ Limit, Tags, Extra-vars)
+    App->>App: 2. Validate request & log audit entry
+    App->>Redis: 3. Dispatch RunPlaybookJob to queue
+    App-->>User: 4. Redirect to Job Details page
+    Worker->>Redis: 5. Pop RunPlaybookJob from queue
+    Worker->>Node: 6. Open SSH connection & execute 'ansible-playbook'
+    loop Execution Progress
+        Node-->>Worker: 7. Streams line-by-line stdout/stderr
+        Worker->>Worker: 8. Parse line (ok, changed, failed, recap)
+        Worker->>Reverb: 9. Broadcast PlaybookOutputChunk event
+        Reverb-->>UI: 10. Push chunk to xterm.js via WebSocket
+        UI-->>User: 11. Render ANSI-colored line in browser
+    end
+    Worker->>App: 12. Save exit code, recap statistics, and full job logs
+    Worker->>Reverb: 13. Broadcast PlaybookFinished event
+    Reverb-->>UI: 14. Terminate WebSocket streaming session
+```
 
 ---
 

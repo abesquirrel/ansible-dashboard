@@ -2,13 +2,16 @@
 
 A production-grade Laravel 11 web dashboard for managing Ansible infrastructure via SSH. Provides a full GUI for playbook execution, inventory visualization, live terminal access, job history, and audit logging — with MariaDB persistence and WebSocket-powered live output.
 
+> [!TIP]
+> For a detailed, step-by-step user manual covering RBAC roles, inventory mapping, playground tools, and interactive SSH terminal use, refer to the [User Guide](file:///Users/paul/Git/ansible-dashboard/USER_GUIDE.md).
+
 ---
 
 ## Stack
 
 | Layer | Technology |
 |---|---|
-| Backend | Laravel 11, PHP 8.2 |
+| Backend | Laravel 11, PHP 8.4 |
 | Database | MariaDB 11 |
 | Queue / Cache | Redis |
 | WebSockets | Laravel Reverb |
@@ -55,6 +58,11 @@ APP_URL=http://your-server-ip
 # Database
 DB_PASSWORD=your_secure_db_password
 
+# Cache & Queue Store (Laravel 11 requirement)
+CACHE_STORE=redis
+CACHE_DRIVER=redis
+QUEUE_CONNECTION=redis
+
 # Ansible SSH Control Node
 ANSIBLE_SSH_HOST=192.168.1.10        # IP/hostname of your Ansible control node
 ANSIBLE_SSH_USER=ansible             # SSH user on control node
@@ -77,7 +85,7 @@ cp ~/.ssh/your_ansible_key ./ansible_rsa
 
 ```bash
 # Generate key
-docker run --rm -v $(pwd):/app -w /app php:8.2-cli php -r "echo 'base64:'.base64_encode(random_bytes(32)).PHP_EOL;"
+docker run --rm -v $(pwd):/app -w /app php:8.4-cli php -r "echo 'base64:'.base64_encode(random_bytes(32)).PHP_EOL;"
 # Paste output into APP_KEY in .env
 
 # Start all services
@@ -109,7 +117,7 @@ http://your-server-ip:8000
 
 ### Requirements
 
-- PHP 8.2+ with extensions: pdo_mysql, mbstring, zip, redis, pcntl, bcmath
+- PHP 8.4+ with extensions: pdo_mysql, mbstring, zip, redis, pcntl, bcmath
 - Composer 2
 - MariaDB 10.6+ or MySQL 8+
 - Redis 6+
@@ -167,11 +175,11 @@ server {
     }
 }
 
-# WebSocket proxy (for Reverb)
+# WebSocket proxy (for Reverb - host port 8081 mapped to 8080 inside container)
 server {
-    listen 8080;
+    listen 8081;
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:8081;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "Upgrade";

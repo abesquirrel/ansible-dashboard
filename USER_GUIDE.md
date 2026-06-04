@@ -23,10 +23,10 @@ CTRL acts as an orchestrator that sits between system administrators and your **
 
 ```mermaid
 graph TD
-    classDef browser fill:#2563eb,stroke:#3b82f6,stroke-width:2px,color:#fff;
-    classDef laravel fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff;
-    classDef storage fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff;
-    classDef controlNode fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff;
+    classDef browser fill:#2563eb,stroke:#3b82f6,stroke-width:2px,color:#fff
+    classDef laravel fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef storage fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef controlNode fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
 
     subgraph UserInterface["Client Browser"]
         Client["Web UI (Blade + Alpine.js + xterm.js)"]:::browser
@@ -48,20 +48,20 @@ graph TD
     end
 
     %% Connections
-    Client -- "HTTP Requests (Port 8000)" --> Apache
-    Client -- "WebSocket Connection (Port 8081)" --> Reverb
+    Client -->|HTTP Requests (Port 8000)| Apache
+    Client -->|WebSocket Connection (Port 8081)| Reverb
 
-    Apache -- "Reads/Writes" --> DB
-    Apache -- "Checks Cache" --> Redis
-    Apache -- "Dispatches Jobs" --> Redis
+    Apache -->|Reads/Writes| DB
+    Apache -->|Checks Cache| Redis
+    Apache -->|Dispatches Jobs| Redis
 
-    Worker -- "Pops Jobs" --> Redis
-    Worker -- "Runs Ansible commands via SSH" --> ControlNode
-    Worker -- "Streams output chunks via Event" --> Reverb
+    Worker -->|Pops Jobs| Redis
+    Worker -->|Runs Ansible commands via SSH| ControlNode
+    Worker -->|Streams output chunks via Event| Reverb
     
-    Scheduler -- "Triggers cron playbooks" --> Redis
+    Scheduler -->|Triggers cron playbooks| Redis
 
-    ControlNode -- "Orchestrates tasks via SSH/WinRM" --> ManagedHosts
+    ControlNode -->|Orchestrates tasks via SSH/WinRM| ManagedHosts
 ```
 
 ### Key Technical Aspects:
@@ -164,15 +164,15 @@ Upon clicking execute, you will be redirected to the **Job View**.
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Admin/Operator (Browser)
-    participant App as Laravel Web App
-    participant Redis as Redis Queue
-    participant Worker as Laravel Queue Worker
-    participant Node as Ansible Control Node
-    participant Reverb as Laravel Reverb WS
-    participant UI as xterm.js Terminal (Browser)
+    actor User as "Admin/Operator (Browser)"
+    participant App as "Laravel Web App"
+    participant Redis as "Redis Queue"
+    participant Worker as "Laravel Queue Worker"
+    participant Node as "Ansible Control Node"
+    participant Reverb as "Laravel Reverb WS"
+    participant UI as "xterm.js Terminal (Browser)"
 
-    User->>App: 1. Click "Execute Playbook" (w/ Limit, Tags, Extra-vars)
+    User->>App: 1. Click 'Execute Playbook' (w/ Limit, Tags, Extra-vars)
     App->>App: 2. Validate request & log audit entry
     App->>Redis: 3. Dispatch RunPlaybookJob to queue
     App-->>User: 4. Redirect to Job Details page

@@ -16,8 +16,16 @@ class InventoryController extends Controller
     public function index(Request $request)
     {
         $inventory = $request->get('inventory', config('ansible.inventory_default'));
-        $graph     = cache()->remember("inv_graph_{$inventory}", 120, fn () => $this->ansible->getInventoryGraph($inventory));
-        $list      = cache()->remember("inv_list_{$inventory}", 120, fn () => $this->ansible->getInventoryList($inventory));
+
+        try {
+            $graph = cache()->remember("inv_graph_{$inventory}", 120, fn () => $this->ansible->getInventoryGraph($inventory));
+            $list  = cache()->remember("inv_list_{$inventory}", 120, fn () => $this->ansible->getInventoryList($inventory));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Inventory load failed (SSH not configured?)', ['error' => $e->getMessage()]);
+            $graph = [];
+            $list  = ['_meta' => ['hostvars' => []]];
+            session()->flash('warning', 'Inventory unavailable: ' . $e->getMessage() . ' — configure ANSIBLE_SSH_KEY_PATH or ANSIBLE_SSH_PASSWORD in .env.');
+        }
 
         return view('inventory.index', compact('graph', 'list', 'inventory'));
     }
@@ -29,14 +37,22 @@ class InventoryController extends Controller
             'inventory' => 'nullable|string',
         ]);
 
-        $result = $this->ansible->pingHosts($data['pattern'], $data['inventory'] ?? '');
+        try {
+            $result = $this->ansible->pingHosts($data['pattern'], $data['inventory'] ?? '');
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 503);
+        }
         return response()->json($result);
     }
 
     public function facts(Request $request)
     {
         $data = $request->validate(['host' => 'required|string']);
-        $facts = $this->ansible->getHostFacts($data['host']);
+        try {
+            $facts = $this->ansible->getHostFacts($data['host']);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 503);
+        }
         return response()->json($facts);
     }
 
@@ -49,13 +65,17 @@ class InventoryController extends Controller
             'inventory' => 'nullable|string',
         ]);
 
-        $result = $this->ansible->runAdHoc(
-            $data['hosts'],
-            $data['module'],
-            $data['args'] ?? '',
-            $data['inventory'] ?? '',
-            auth()->id()
-        );
+        try {
+            $result = $this->ansible->runAdHoc(
+                $data['hosts'],
+                $data['module'],
+                $data['args'] ?? '',
+                $data['inventory'] ?? '',
+                auth()->id()
+            );
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 503);
+        }
 
         return response()->json($result);
     }
@@ -63,7 +83,11 @@ class InventoryController extends Controller
     public function getFile(Request $request)
     {
         $request->validate(['path' => 'required|string']);
-        $content = $this->ssh->readRemoteFile($request->path);
+        try {
+            $content = $this->ssh->readRemoteFile($request->path);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 503);
+        }
         return response()->json(['content' => $content, 'path' => $request->path]);
     }
 
@@ -74,7 +98,6 @@ class InventoryController extends Controller
             'content' => 'required|string',
         ]);
 
-        // Write to temp, upload via SFTP
         $tmpPath = '/tmp/inv_edit_' . uniqid();
         file_put_contents($tmpPath, $data['content']);
 
@@ -83,6 +106,8 @@ class InventoryController extends Controller
             cache()->forget('inv_graph_' . $data['path']);
             cache()->forget('inv_list_' . $data['path']);
             return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 503);
         } finally {
             @unlink($tmpPath);
         }

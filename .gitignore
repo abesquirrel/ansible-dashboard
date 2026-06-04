@@ -20,3 +20,8 @@ ansible_rsa
 ansible_rsa.pub
 *.pem
 *.key
+/bootstrap/cache/*.php
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*.php
+/storage/logs/*.log

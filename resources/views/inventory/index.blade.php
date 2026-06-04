@@ -176,7 +176,7 @@
 @endsection
 
 @push('scripts')
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="{{ asset('vendor/d3.min.js') }}"></script>
 <script>
 // ── Tab switching ──
 function switchTab(name, el) {

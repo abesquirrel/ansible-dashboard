@@ -12,7 +12,12 @@ class PlaybookController extends Controller
 
     public function index()
     {
-        $playbooks = $this->ansible->listPlaybooks();
+        try {
+            $playbooks = $this->ansible->listPlaybooks();
+        } catch (\Throwable $e) {
+            $playbooks = [];
+            session()->flash('warning', 'Playbook list unavailable: ' . $e->getMessage() . ' — configure SSH credentials in .env.');
+        }
         $jobs = PlaybookJob::with('user')->latest()->paginate(20);
         return view('playbooks.index', compact('playbooks', 'jobs'));
     }
@@ -57,7 +62,11 @@ class PlaybookController extends Controller
     public function getContent(Request $request)
     {
         $request->validate(['path' => 'required|string']);
-        $content = $this->ansible->getPlaybookContent($request->path);
+        try {
+            $content = $this->ansible->getPlaybookContent($request->path);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 503);
+        }
         return response()->json(['content' => $content]);
     }
 

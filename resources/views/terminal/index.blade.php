@@ -6,7 +6,7 @@
     <div class="flex items-center" style="padding-bottom:16px">
         <div>
             <h1 class="page-title">Terminal</h1>
-            <p class="page-subtitle">Direct SSH access to {{ config('ansible.ssh.user') }}@{{ config('ansible.ssh.host') }}</p>
+            <p class="page-subtitle">Direct SSH access to {{ config('ansible.ssh.user') }}{{'@'}}{{ config('ansible.ssh.host') }}</p>
         </div>
         <div class="ml-auto flex gap-2">
             <div id="mode-badge" class="badge" style="background:var(--green-dim);color:var(--green)">COMMAND</div>
@@ -22,7 +22,7 @@
             <div class="term-dot y"></div>
             <div class="term-dot g"></div>
             <div class="term-title text-mono text-xs">
-                {{ config('ansible.ssh.user') }}@{{ config('ansible.ssh.host') }} — ansible terminal
+                {{ config('ansible.ssh.user') }}{{'@'}}{{ config('ansible.ssh.host') }} — ansible terminal
             </div>
             <div id="exec-indicator" style="display:none;font-family:var(--font-mono);font-size:10px;color:var(--yellow);display:flex;align-items:center;gap:6px">
                 <div class="spinner" style="width:10px;height:10px;border-width:1.5px"></div>
@@ -127,7 +127,7 @@
     term.writeln('\x1b[32m╚██████╗   ██║   ██║  ██║███████╗\x1b[0m');
     term.writeln('\x1b[32m ╚═════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝\x1b[0m');
     term.writeln('\x1b[90m Ansible Control Dashboard — SSH Terminal\x1b[0m');
-    term.writeln('\x1b[90m Connected to: \x1b[36m{{ config('ansible.ssh.user') }}@{{ config('ansible.ssh.host') }}\x1b[0m\r\n');
+    term.writeln('\x1b[90m Connected to: \x1b[36m{{ config('ansible.ssh.user') }}{{'@'}}{{ config('ansible.ssh.host') }}\x1b[0m\r\n');
     term.write(prompt);
 
     // ── Key handling ──

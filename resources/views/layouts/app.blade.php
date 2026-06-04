@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.css">
+    <link rel="stylesheet" href="{{ asset('vendor/xterm.min.css') }}">
 
     <style>
         :root {
@@ -685,7 +685,7 @@
 
         <div class="conn-badge" id="conn-badge" title="SSH Control Node">
             <div class="conn-dot {{ isset($connectionStatus['connected']) && $connectionStatus['connected'] ? 'connected' : 'error' }}" id="conn-dot"></div>
-            <span id="conn-host">{{ config('ansible.ssh.user') }}@{{ config('ansible.ssh.host') }}</span>
+            <span id="conn-host">{{ config('ansible.ssh.user') }}{{'@'}}{{ config('ansible.ssh.host') }}</span>
         </div>
 
         @if(isset($connectionStatus['ansible_version']))
@@ -805,14 +805,21 @@
                 <div class="alert alert-error">{{ session('error') }}</div>
             </div>
         @endif
+        @if(session('warning'))
+            <div style="padding:16px 28px 0">
+                <div class="alert" style="background:rgba(255,180,0,.1);border:1px solid rgba(255,180,0,.3);color:#ffb400;border-radius:6px;padding:12px 16px;font-size:13px;">
+                    ⚠ {{ session('warning') }}
+                </div>
+            </div>
+        @endif
 
         @yield('content')
     </main>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/addon-fit/xterm-addon-fit.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.0/cdn.min.js" defer></script>
+<script src="{{ asset('vendor/xterm.min.js') }}"></script>
+<script src="{{ asset('vendor/xterm-addon-fit.min.js') }}"></script>
+<script src="{{ asset('vendor/cdn.min.js') }}" defer></script>
 
 <script>
 // Global CSRF setup

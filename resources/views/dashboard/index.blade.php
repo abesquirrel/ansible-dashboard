@@ -201,7 +201,7 @@
 @endsection
 
 @push('scripts')
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ asset('vendor/chart.umd.min.js') }}"></script>
 <script>
 (function() {
     const trend = @json($jobTrend);

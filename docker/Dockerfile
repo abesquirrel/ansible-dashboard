@@ -1,4 +1,4 @@
-FROM php:8.2-apache
+FROM php:8.4-apache
 
 # System dependencies
 RUN apt-get update && apt-get install -y \
@@ -24,6 +24,14 @@ WORKDIR /var/www/html
 
 # Copy source
 COPY . .
+
+# Ensure writable dirs exist (excluded from .dockerignore)
+RUN mkdir -p bootstrap/cache \
+    storage/app \
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction

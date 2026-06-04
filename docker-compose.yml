@@ -1,0 +1,109 @@
+version: '3.9'
+
+services:
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: ansible-ctrl-app
+    restart: unless-stopped
+    environment:
+      - APP_ENV=production
+      - APP_KEY=${APP_KEY}
+    env_file: .env
+    volumes:
+      - .:/var/www/html
+      - ./storage:/var/www/html/storage
+      - ${ANSIBLE_SSH_KEY_PATH:-/dev/null}:/home/www-data/.ssh/ansible_rsa:ro
+    depends_on:
+      - db
+      - redis
+    networks:
+      - ctrl-net
+    ports:
+      - "8000:80"
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: ansible-ctrl-worker
+    restart: unless-stopped
+    command: php artisan queue:work redis --sleep=3 --tries=1 --timeout=3600 --queue=default
+    env_file: .env
+    volumes:
+      - .:/var/www/html
+      - ${ANSIBLE_SSH_KEY_PATH:-/dev/null}:/home/www-data/.ssh/ansible_rsa:ro
+    depends_on:
+      - db
+      - redis
+    networks:
+      - ctrl-net
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: ansible-ctrl-scheduler
+    restart: unless-stopped
+    command: bash -c "while true; do php artisan schedule:run --no-interaction; sleep 60; done"
+    env_file: .env
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      - db
+      - redis
+    networks:
+      - ctrl-net
+
+  reverb:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: ansible-ctrl-reverb
+    restart: unless-stopped
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    env_file: .env
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      - redis
+    ports:
+      - "8080:8080"
+    networks:
+      - ctrl-net
+
+  db:
+    image: mariadb:11.2
+    container_name: ansible-ctrl-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE:      ${DB_DATABASE:-ansible_dashboard}
+      MYSQL_USER:          ${DB_USERNAME:-ansible}
+      MYSQL_PASSWORD:      ${DB_PASSWORD:-ansible_password}
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - ctrl-net
+    ports:
+      - "3306:3306"
+
+  redis:
+    image: redis:7-alpine
+    container_name: ansible-ctrl-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - ctrl-net
+
+volumes:
+  db-data:
+  redis-data:
+
+networks:
+  ctrl-net:
+    driver: bridge

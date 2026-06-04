@@ -23,35 +23,30 @@ CTRL acts as an orchestrator that sits between system administrators and your **
 
 ```mermaid
 graph TD
-    classDef browser fill:#2563eb,stroke:#3b82f6,stroke-width:2px,color:#fff
-    classDef laravel fill:#ef4444,stroke:#f87171,stroke-width:2px,color:#fff
-    classDef storage fill:#10b981,stroke:#34d399,stroke-width:2px,color:#fff
-    classDef controlNode fill:#f59e0b,stroke:#fbbf24,stroke-width:2px,color:#fff
-
     subgraph UserInterface["Client Browser"]
-        Client["Web UI (Blade + Alpine.js + xterm.js)"]:::browser
+        Client["Web UI with Blade, Alpine.js, and xterm.js"]
     end
 
-    subgraph AppServer["Docker Host (CTRL Containers)"]
-        Apache["ansible-ctrl-app (Apache + PHP 8.4)"]:::laravel
-        Worker["ansible-ctrl-worker (Queue Worker)"]:::laravel
-        Scheduler["ansible-ctrl-scheduler"]:::laravel
-        Reverb["ansible-ctrl-reverb (WebSocket Server :8081)"]:::laravel
+    subgraph AppServer["Docker Host with CTRL Containers"]
+        Apache["ansible-ctrl-app with Apache and PHP 8.4"]
+        Worker["ansible-ctrl-worker Queue Worker"]
+        Scheduler["ansible-ctrl-scheduler"]
+        Reverb["ansible-ctrl-reverb WebSocket Server"]
         
-        DB[("ansible-ctrl-db (MariaDB 11.2)")]:::storage
-        Redis[("ansible-ctrl-redis (Cache/Queue)")]:::storage
+        DB["ansible-ctrl-db MariaDB 11.2"]
+        Redis["ansible-ctrl-redis Cache and Queue"]
     end
 
     subgraph TargetInfra["Ansible Environment"]
-        ControlNode["Ansible Control Node"]:::controlNode
-        ManagedHosts["Target Managed Hosts"]:::controlNode
+        ControlNode["Ansible Control Node"]
+        ManagedHosts["Target Managed Hosts"]
     end
 
     %% Connections
-    Client -->|"HTTP Requests (Port 8000)"| Apache
-    Client -->|"WebSocket Connection (Port 8081)"| Reverb
+    Client -->|"HTTP Requests"| Apache
+    Client -->|"WebSocket Connection"| Reverb
 
-    Apache -->|"Reads/Writes"| DB
+    Apache -->|"Reads and Writes"| DB
     Apache -->|"Checks Cache"| Redis
     Apache -->|"Dispatches Jobs"| Redis
 
@@ -61,7 +56,7 @@ graph TD
     
     Scheduler -->|"Triggers cron playbooks"| Redis
 
-    ControlNode -->|"Orchestrates tasks via SSH/WinRM"| ManagedHosts
+    ControlNode -->|"Orchestrates tasks via SSH and WinRM"| ManagedHosts
 ```
 
 ### Key Technical Aspects:
@@ -173,7 +168,7 @@ sequenceDiagram
     participant UI as Terminal UI
 
     User->>App: 1. Click Execute Playbook with Limit, Tags, Extra-vars
-    App->>App: 2. Validate request & log audit entry
+    App->>App: 2. Validate request and log audit entry
     App->>Redis: 3. Dispatch RunPlaybookJob to queue
     App-->>User: 4. Redirect to Job Details page
     Worker->>Redis: 5. Pop RunPlaybookJob from queue

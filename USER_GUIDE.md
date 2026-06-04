@@ -164,25 +164,25 @@ Upon clicking execute, you will be redirected to the **Job View**.
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as "Admin/Operator (Browser)"
-    participant App as "Laravel Web App"
-    participant Redis as "Redis Queue"
-    participant Worker as "Laravel Queue Worker"
-    participant Node as "Ansible Control Node"
-    participant Reverb as "Laravel Reverb WS"
-    participant UI as "xterm.js Terminal (Browser)"
+    actor User as Client Browser
+    participant App as Laravel Web App
+    participant Redis as Redis Queue
+    participant Worker as Laravel Queue Worker
+    participant Node as Ansible Control Node
+    participant Reverb as Laravel Reverb WS
+    participant UI as Terminal UI
 
-    User->>App: 1. Click 'Execute Playbook' (w/ Limit, Tags, Extra-vars)
+    User->>App: 1. Click Execute Playbook with Limit, Tags, Extra-vars
     App->>App: 2. Validate request & log audit entry
     App->>Redis: 3. Dispatch RunPlaybookJob to queue
     App-->>User: 4. Redirect to Job Details page
     Worker->>Redis: 5. Pop RunPlaybookJob from queue
-    Worker->>Node: 6. Open SSH connection & execute 'ansible-playbook'
+    Worker->>Node: 6. Open SSH connection and run playbook
     loop Execution Progress
-        Node-->>Worker: 7. Streams line-by-line stdout/stderr
-        Worker->>Worker: 8. Parse line (ok, changed, failed, recap)
+        Node-->>Worker: 7. Streams line-by-line stdout and stderr
+        Worker->>Worker: 8. Parse line for ok, changed, and failed status
         Worker->>Reverb: 9. Broadcast PlaybookOutputChunk event
-        Reverb-->>UI: 10. Push chunk to xterm.js via WebSocket
+        Reverb-->>UI: 10. Push chunk to terminal via WebSocket
         UI-->>User: 11. Render ANSI-colored line in browser
     end
     Worker->>App: 12. Save exit code, recap statistics, and full job logs

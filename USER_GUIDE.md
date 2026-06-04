@@ -48,20 +48,20 @@ graph TD
     end
 
     %% Connections
-    Client -->|HTTP Requests (Port 8000)| Apache
-    Client -->|WebSocket Connection (Port 8081)| Reverb
+    Client -->|"HTTP Requests (Port 8000)"| Apache
+    Client -->|"WebSocket Connection (Port 8081)"| Reverb
 
-    Apache -->|Reads/Writes| DB
-    Apache -->|Checks Cache| Redis
-    Apache -->|Dispatches Jobs| Redis
+    Apache -->|"Reads/Writes"| DB
+    Apache -->|"Checks Cache"| Redis
+    Apache -->|"Dispatches Jobs"| Redis
 
-    Worker -->|Pops Jobs| Redis
-    Worker -->|Runs Ansible commands via SSH| ControlNode
-    Worker -->|Streams output chunks via Event| Reverb
+    Worker -->|"Pops Jobs"| Redis
+    Worker -->|"Runs Ansible commands via SSH"| ControlNode
+    Worker -->|"Streams output chunks via Event"| Reverb
     
-    Scheduler -->|Triggers cron playbooks| Redis
+    Scheduler -->|"Triggers cron playbooks"| Redis
 
-    ControlNode -->|Orchestrates tasks via SSH/WinRM| ManagedHosts
+    ControlNode -->|"Orchestrates tasks via SSH/WinRM"| ManagedHosts
 ```
 
 ### Key Technical Aspects:

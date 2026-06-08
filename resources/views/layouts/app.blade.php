@@ -824,11 +824,18 @@
 <script>
 // Global CSRF setup
 window.CSRF_TOKEN = '{{ csrf_token() }}';
-window.REVERB_HOST = '{{ env("REVERB_HOST", "localhost") }}';
-window.REVERB_PORT = '{{ env("REVERB_PORT", 8080) }}';
+// REVERB_HOST must be browser-reachable. If it was bound to 0.0.0.0 on the server,
+// the browser can't connect to that address — fall back to the page's own hostname.
+(function() {
+    const configured = '{{ env("REVERB_HOST", "") }}';
+    window.REVERB_HOST = (!configured || configured === '0.0.0.0') ? window.location.hostname : configured;
+})();
+window.REVERB_PORT = '{{ env("REVERB_PORT", 8081) }}';
 window.REVERB_KEY  = '{{ env("REVERB_APP_KEY") }}';
 
-// API helper
+// API helper — guards against HTML error pages being returned instead of JSON.
+// If the server redirects to login or returns a 5xx HTML error, resp.json() would
+// throw "Unexpected token '<', <!DOCTYPE..." — we detect that and re-throw cleanly.
 async function api(url, opts = {}) {
     const resp = await fetch(url, {
         headers: {
@@ -838,6 +845,19 @@ async function api(url, opts = {}) {
         },
         ...opts
     });
+
+    // If the session expired the server redirects to /login (302 → HTML).
+    // If a 5xx occurred, the error handler returns an HTML page.
+    // Guard against both by checking content-type before parsing.
+    const ct = resp.headers.get('Content-Type') || '';
+    if (!ct.includes('application/json')) {
+        if (resp.status === 401 || resp.redirected) {
+            window.location.href = '/login';
+            throw new Error('Session expired — redirecting to login.');
+        }
+        throw new Error(`Server returned HTTP ${resp.status} with non-JSON response (${ct.split(';')[0]}). Check server logs.`);
+    }
+
     return resp.json();
 }
 

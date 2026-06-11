@@ -20,14 +20,15 @@ class InventoryController extends Controller
         try {
             $graph = cache()->remember("inv_graph_{$inventory}", 120, fn () => $this->ansible->getInventoryGraph($inventory));
             $list  = cache()->remember("inv_list_{$inventory}", 120, fn () => $this->ansible->getInventoryList($inventory));
+            $sshError = null;
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('Inventory load failed (SSH not configured?)', ['error' => $e->getMessage()]);
             $graph = [];
             $list  = ['_meta' => ['hostvars' => []]];
-            session()->flash('warning', 'Inventory unavailable: ' . $e->getMessage() . ' — configure ANSIBLE_SSH_KEY_PATH or ANSIBLE_SSH_PASSWORD in .env.');
+            $sshError = $e->getMessage();
         }
 
-        return view('inventory.index', compact('graph', 'list', 'inventory'));
+        return view('inventory.index', compact('graph', 'list', 'inventory', 'sshError'));
     }
 
     public function ping(Request $request)

@@ -19,6 +19,35 @@
 
 <div class="page-body">
 
+    @if(!empty($sshError))
+    <div class="card mb-4" style="border-color: var(--red);">
+        <div class="card-header" style="background: rgba(255, 71, 87, 0.1);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span class="card-title text-red" style="margin-left: 8px;">SSH Connection Failed</span>
+        </div>
+        <div class="card-body">
+            <p style="font-size: 14px; margin-bottom: 16px;">
+                The dashboard could not connect to the Ansible control node. This is a common issue when setting up this project for the first time.
+            </p>
+            <div class="code-block" style="margin-bottom: 16px; border-color: var(--red-dim); color: var(--red);">{{ $sshError }}</div>
+
+            <h3 style="margin-top: 20px; font-size: 14px; color: var(--accent); margin-bottom: 8px;">Learning Goal: How Ansible Dashboard Works</h3>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.6;">
+                This dashboard runs inside a Docker container (<code>ansible-ctrl-app</code>) and connects to a separate <strong>Control Node</strong> or directly to a target machine via SSH. To fetch the inventory, it uses the <code>phpseclib3</code> library to SSH into the host specified in your <code>.env</code> file, execute Ansible commands, and parse the output.
+            </p>
+
+            <h3 style="margin-top: 20px; font-size: 14px; color: var(--accent); margin-bottom: 8px;">How to Fix "Connection Refused (Error 111)"</h3>
+            <ul style="font-size: 13px; color: var(--text-secondary); margin-left: 20px; margin-bottom: 16px; line-height: 1.6;">
+                <li style="margin-bottom: 6px;"><strong>Check your .env settings:</strong> Ensure <code>ANSIBLE_SSH_HOST</code>, <code>ANSIBLE_SSH_PORT</code>, and <code>ANSIBLE_SSH_USER</code> match a reachable machine. Currently trying to connect to: <code>{{ config('ansible.ssh.host') }}:{{ config('ansible.ssh.port', 22) }}</code>.</li>
+                <li style="margin-bottom: 6px;"><strong>Is the SSH service running?</strong> If you are connecting to a local VM or Docker container, ensure the <code>sshd</code> daemon is active. Try running <code>ssh {{ config('ansible.ssh.user') }}@{{ config('ansible.ssh.host') }} -p {{ config('ansible.ssh.port', 22) }}</code> from your host terminal.</li>
+                <li style="margin-bottom: 6px;"><strong>Docker Network Isolation:</strong> If the target is on your host machine, <code>127.0.0.1</code> or <code>localhost</code> inside the Docker container points to the container itself, not your host. For Mac, use <code>host.docker.internal</code> as the <code>ANSIBLE_SSH_HOST</code>. For Linux, use the docker bridge IP (e.g., <code>172.17.0.1</code>) or your host's LAN IP.</li>
+            </ul>
+        </div>
+    </div>
+    @endif
+
     {{-- Graph Tab --}}
     <div id="tab-graph">
         <div class="card mb-4">

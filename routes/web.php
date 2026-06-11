@@ -8,6 +8,7 @@ use App\Http\Controllers\{
     TerminalController,
     LogController,
     SettingsController,
+    LearningController,
 };
 
 // Auth routes
@@ -20,6 +21,12 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Dashboard
     Route::get('/',          [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/status',    [DashboardController::class, 'connectionStatus'])->name('status');
+
+    // Learning
+    Route::prefix('learning')->name('learning.')->group(function () {
+        Route::get('/',             [LearningController::class, 'index'])->name('index');
+        Route::get('/{slug}',       [LearningController::class, 'topic'])->name('topic');
+    });
 
     // Playbooks
     Route::prefix('playbooks')->name('playbooks.')->group(function () {

@@ -70,5 +70,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/',              [SettingsController::class, 'index'])->name('index');
         Route::post('/test',         [SettingsController::class, 'testConnection'])->name('test');
         Route::post('/env',          [SettingsController::class, 'updateEnv'])->name('env');
+        Route::post('/export',       [SettingsController::class, 'exportConfig'])->name('export');
+        Route::post('/import',       [SettingsController::class, 'importConfig'])->name('import');
     });
 });

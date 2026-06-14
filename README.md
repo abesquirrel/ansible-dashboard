@@ -287,6 +287,31 @@ ansible-dashboard/
 
 ---
 
+## Exporting & Importing Configuration (Multi-Device)
+
+For developers running this dashboard on multiple laptops, a utility script `sync-env.sh` is provided to securely package and restore environment configurations (`.env`) and SSH private keys.
+
+### 1. Export Settings (Source Laptop)
+Run the script to create a password-encrypted ZIP archive containing your local `.env` and host/local SSH keys:
+```bash
+./sync-env.sh export [backup_name.zip]
+```
+*You will be prompted to enter a password to secure the archive.*
+
+### 2. Import Settings (Target Laptop)
+Move the ZIP archive to the dashboard root on your new laptop and run:
+```bash
+./sync-env.sh import [backup_name.zip]
+```
+*You will be prompted for the password, and then asked for confirmation before writing the host SSH key (`~/.ssh/id_ed25519`) or overwriting an existing `.env` file.*
+
+Finally, apply the configuration inside Docker:
+```bash
+docker compose down && docker compose up -d
+```
+
+---
+
 ## Environment Reference
 
 | Variable | Description |

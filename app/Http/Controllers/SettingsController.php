@@ -84,4 +84,100 @@ class SettingsController extends Controller
         }
         file_put_contents($envFile, $content);
     }
+
+    public function exportConfig(Request $request)
+    {
+        $request->validate([
+            'password' => 'required|string|min:4',
+        ]);
+
+        $password = $request->input('password');
+        $envFile = base_path('.env');
+        
+        if (!file_exists($envFile)) {
+            return back()->withErrors(['error' => 'No .env file found to export.']);
+        }
+
+        $envContent = file_get_contents($envFile);
+        
+        $keyPath = config('ansible.ssh.key_path');
+        $keyContent = null;
+        if ($keyPath && file_exists($keyPath)) {
+            $keyContent = file_get_contents($keyPath);
+        }
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'backup_') . '.zip';
+        $zip = new \ZipArchive();
+
+        if ($zip->open($tempFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+            $zip->setPassword($password);
+            
+            $zip->addFromString('env_backup', $envContent);
+            $zip->setEncryptionName('env_backup', \ZipArchive::EM_AES_256);
+
+            if ($keyContent) {
+                $zip->addFromString('ansible_rsa', $keyContent);
+                $zip->setEncryptionName('ansible_rsa', \ZipArchive::EM_AES_256);
+            }
+
+            $zip->close();
+
+            return response()->download($tempFile, 'ctrl_backup_' . date('Y-m-d_His') . '.zip')->deleteFileAfterSend(true);
+        }
+
+        return back()->with('error', 'Failed to create backup zip file.');
+    }
+
+    public function importConfig(Request $request)
+    {
+        $request->validate([
+            'backup_file' => 'required|file',
+            'password'    => 'required|string',
+        ]);
+
+        $file = $request->file('backup_file');
+        $password = $request->input('password');
+
+        $zip = new \ZipArchive();
+        if ($zip->open($file->getRealPath()) === true) {
+            $zip->setPassword($password);
+
+            $envContent = $zip->getFromName('env_backup');
+            if ($envContent === false) {
+                $zip->close();
+                return back()->with('error', 'Failed to decrypt backup. Please verify your password.');
+            }
+
+            $keyContent = $zip->getFromName('ansible_rsa');
+            $zip->close();
+
+            file_put_contents(base_path('.env'), $envContent);
+
+            if ($keyContent) {
+                $localKeyPath = base_path('ansible_rsa');
+                file_put_contents($localKeyPath, $keyContent);
+                chmod($localKeyPath, 0600);
+
+                $envContent = file_get_contents(base_path('.env'));
+                
+                if (preg_match('/^ANSIBLE_SSH_KEY_PATH=.*/m', $envContent)) {
+                    $envContent = preg_replace('/^ANSIBLE_SSH_KEY_PATH=.*/m', 'ANSIBLE_SSH_KEY_PATH=/var/www/html/ansible_rsa', $envContent);
+                } else {
+                    $envContent .= "\nANSIBLE_SSH_KEY_PATH=/var/www/html/ansible_rsa";
+                }
+                file_put_contents(base_path('.env'), $envContent);
+            }
+
+            \Illuminate\Support\Facades\Artisan::call('config:clear');
+            \Illuminate\Support\Facades\Artisan::call('config:cache');
+            \Illuminate\Support\Facades\Artisan::call('queue:restart');
+
+            app()->forgetInstance(\App\Services\AnsibleSSHService::class);
+            app()->forgetInstance(\App\Services\AnsibleService::class);
+
+            return back()->with('success', 'Configuration and keys successfully imported! Application settings have been updated.');
+        }
+
+        return back()->with('error', 'Unable to open ZIP backup archive.');
+    }
 }

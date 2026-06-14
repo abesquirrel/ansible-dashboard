@@ -1,0 +1,59 @@
+APP_NAME="Ansible Dashboard"
+APP_ENV=production
+APP_KEY=base64:6EVYt7oepnNPgFpJoeB1IoA7TTTOqOT0RINASyI6FEs=
+APP_DEBUG=false
+APP_URL=http://localhost:8000
+
+LOG_CHANNEL=stack
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=debug
+
+DB_CONNECTION=mariadb
+DB_HOST=db
+DB_PORT=3306
+DB_DATABASE=ansible_dashboard
+DB_USERNAME=ansible
+DB_PASSWORD=ansible_password
+DB_ROOT_PASSWORD=rootpassword
+
+# Redis (for queues, cache, websockets)
+REDIS_HOST=redis
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+CACHE_STORE=redis
+CACHE_DRIVER=redis
+SESSION_DRIVER=redis
+SESSION_LIFETIME=480
+QUEUE_CONNECTION=redis
+
+# Laravel Reverb (WebSockets)
+REVERB_APP_ID=ansible-dashboard
+REVERB_APP_KEY=your_reverb_key
+REVERB_APP_SECRET=your_reverb_secret
+# REVERB_HOST = client/browser-facing host (used in Pusher broadcaster URL and JS client)
+REVERB_HOST=localhost
+# REVERB_PORT = Docker-mapped external port (docker-compose maps host:8081 → container:8080)
+REVERB_PORT=8081
+REVERB_SCHEME=http
+# REVERB_SERVER_* = internal binding — server listens on all interfaces inside the container
+REVERB_SERVER_HOST=0.0.0.0
+REVERB_SERVER_PORT=8080
+
+BROADCAST_CONNECTION=reverb
+
+# Ansible SSH Control Node
+ANSIBLE_SSH_HOST=host.docker.internal
+ANSIBLE_SSH_PORT=2222
+ANSIBLE_SSH_USER=paul
+# Use key-based auth (recommended) or password
+ANSIBLE_SSH_KEY_PATH_HOST=/Users/paul/.ssh/id_ed25519
+ANSIBLE_SSH_KEY_PATH=/home/www-data/.ssh/ansible_rsa
+ANSIBLE_SSH_PASSWORD=
+ANSIBLE_WORKING_DIR=/ansible
+ANSIBLE_INVENTORY_DEFAULT=/ansible/inventory.ini
+ANSIBLE_PLAYBOOKS_DIR=/ansible
+ANSIBLE_VAULT_PASSWORD_FILE=
+
+# Security
+ADMIN_SETUP_TOKEN=change_this_immediately

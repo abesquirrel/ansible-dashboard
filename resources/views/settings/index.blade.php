@@ -80,6 +80,63 @@
                 </div>
             </div>
 
+            {{-- Device Sync & Backup --}}
+            <div class="card mb-4" x-data="syncConfig()">
+                <div class="card-header">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                    </svg>
+                    <span class="card-title">Device Sync & Backup</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted text-xs mb-4">Export or import your environment config (.env) and SSH key as a password-encrypted ZIP archive to sync between development devices.</p>
+
+                    <div class="flex gap-2 mb-4" style="border-bottom: 1px solid var(--border); padding-bottom: 12px">
+                        <button class="btn btn-sm" :class="tab === 'export' ? 'btn-primary' : 'btn-secondary'" @click="tab = 'export'">Export Backup</button>
+                        <button class="btn btn-sm" :class="tab === 'import' ? 'btn-primary' : 'btn-secondary'" @click="tab = 'import'">Import Backup</button>
+                    </div>
+
+                    {{-- Export Form --}}
+                    <div x-show="tab === 'export'">
+                        <form method="POST" action="{{ route('settings.export') }}">
+                            @csrf
+                            <div class="form-group">
+                                <label class="form-label">Encryption Password</label>
+                                <input type="password" name="password" required class="form-input" placeholder="Enter password to lock backup">
+                                <div class="form-hint">Required to decrypt the archive when importing on another laptop.</div>
+                            </div>
+                            <button type="submit" class="btn btn-secondary btn-sm" style="width: 100%; justify-content: center">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                                </svg>
+                                Generate & Download Backup
+                            </button>
+                        </form>
+                    </div>
+
+                    {{-- Import Form --}}
+                    <div x-show="tab === 'import'">
+                        <form method="POST" action="{{ route('settings.import') }}" enctype="multipart/form-data">
+                            @csrf
+                            <div class="form-group">
+                                <label class="form-label">Select Backup File (.zip)</label>
+                                <input type="file" name="backup_file" required class="form-input" accept=".zip" style="padding: 5px">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Decryption Password</label>
+                                <input type="password" name="password" required class="form-input" placeholder="Enter backup password">
+                            </div>
+                            <button type="submit" class="btn btn-danger btn-sm" style="width: 100%; justify-content: center" onclick="return confirm('Importing backup will overwrite your current keys and configuration settings. Are you sure you want to proceed?')">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                                </svg>
+                                Decrypt & Apply Backup
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
@@ -131,6 +188,12 @@ function connTest() {
             this.result = await api('/settings/test', { method: 'POST' });
             this.testing = false;
         }
+    };
+}
+
+function syncConfig() {
+    return {
+        tab: 'export'
     };
 }
 </script>

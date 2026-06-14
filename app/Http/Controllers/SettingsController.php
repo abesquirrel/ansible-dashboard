@@ -40,6 +40,9 @@ class SettingsController extends Controller
 
         foreach ($data as $key => $value) {
             $this->setEnvValue($key, $value);
+            putenv("{$key}={$value}");
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
         }
 
         // Immediately refresh the in-process config so the redirect shows the new values

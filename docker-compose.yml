@@ -10,7 +10,6 @@ services:
     environment:
       - APP_ENV=production
       - APP_KEY=${APP_KEY}
-    env_file: .env
     volumes:
       - .:/var/www/html
       - ./storage:/var/www/html/storage
@@ -30,7 +29,6 @@ services:
     container_name: ansible-ctrl-worker
     restart: unless-stopped
     command: php artisan queue:work redis --sleep=3 --tries=1 --timeout=3600 --queue=default
-    env_file: .env
     volumes:
       - .:/var/www/html
       - ${ANSIBLE_SSH_KEY_PATH:-/dev/null}:/home/www-data/.ssh/ansible_rsa:ro
@@ -47,7 +45,6 @@ services:
     container_name: ansible-ctrl-scheduler
     restart: unless-stopped
     command: bash -c "while true; do php artisan schedule:run --no-interaction; sleep 60; done"
-    env_file: .env
     volumes:
       - .:/var/www/html
     depends_on:
@@ -63,7 +60,6 @@ services:
     container_name: ansible-ctrl-reverb
     restart: unless-stopped
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
-    env_file: .env
     volumes:
       - .:/var/www/html
     depends_on:

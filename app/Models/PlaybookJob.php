@@ -49,4 +49,14 @@ class PlaybookJob extends Model
     {
         return $query->latest()->limit($limit);
     }
+
+    public function getAssessmentAttribute(): array
+    {
+        return \App\Services\AssessmentParser::parse($this);
+    }
+
+    public function hasAssessment(): bool
+    {
+        return !empty($this->assessment['hosts']);
+    }
 }

@@ -8,12 +8,20 @@ use App\Models\JobOutputLine;
 use App\Services\AnsibleService;
 use App\Services\AnsibleSSHService;
 use App\Jobs\RunPlaybookJob;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Tests\TestCase;
 
 class AnsibleServiceTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Ensure the SQLite in-memory schema is built before we create any records.
+        $this->artisan('migrate:fresh', ['--force' => true]);
+    }
 
     public function test_build_playbook_command()
     {

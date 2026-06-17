@@ -6,18 +6,21 @@ use App\Models\User;
 use App\Models\PlaybookJob;
 use App\Models\JobOutputLine;
 use App\Services\AnsibleSSHService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Tests\TestCase;
 
 class PlaybookTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
     protected User $user;
 
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Ensure the SQLite in-memory schema is built before we create any records.
+        $this->artisan('migrate:fresh', ['--force' => true]);
 
         $this->user = User::create([
             'name' => 'Operator User',

@@ -4,16 +4,19 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Services\AnsibleSSHService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Tests\TestCase;
 
 class DashboardTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Ensure the SQLite in-memory schema is built before we create any records.
+        $this->artisan('migrate:fresh', ['--force' => true]);
 
         // Mock AnsibleSSHService to avoid real network/SSH connections during testing
         $this->mock(AnsibleSSHService::class, function ($mock) {

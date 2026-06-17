@@ -449,6 +449,58 @@
     white-space: pre-wrap;
     word-break: break-all;
 }
+
+/* Msg Panel — rendered from Ansible box-drawing output */
+.msg-panel {
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+.msg-panel-title {
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+}
+.msg-rows {
+    padding: 4px 0;
+}
+.msg-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.msg-row:last-child { border-bottom: none; }
+.msg-key {
+    flex-shrink: 0;
+    width: 130px;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+.msg-val {
+    color: var(--text-primary);
+    font-size: 11px;
+    word-break: break-word;
+}
+.msg-section {
+    padding: 6px 12px 2px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+}
 </style>
 @endpush
 
@@ -478,8 +530,9 @@
         
         // Match PLAY header
         if (cleanText.includes('PLAY [')) {
-            let match = cleanText.match(/PLAY\s+\[([^\]]+)\]/i);
-            let title = match ? match[1] : 'Playbook Start';
+            let match = cleanText.match(/PLAY\s+\[(.*)\]\s*[\*\s]*$/i)
+                     || cleanText.match(/PLAY\s+\[(.*)\]/i);
+            let title = match ? match[1].trim() : 'Playbook Start';
             return `<div class="visual-header play-header">
                 <span class="visual-header-badge play-badge">PLAY</span>
                 <span class="visual-header-title">${escapeHtml(title)}</span>
@@ -488,8 +541,9 @@
         
         // Match TASK header
         if (cleanText.includes('TASK [')) {
-            let match = cleanText.match(/TASK\s+\[([^\]]+)\]/i);
-            let title = match ? match[1] : 'Task Execution';
+            let match = cleanText.match(/TASK\s+\[(.*)\]\s*[\*\s]*$/i)
+                     || cleanText.match(/TASK\s+\[(.*)\]/i);
+            let title = match ? match[1].trim() : 'Task Execution';
             return `<div class="visual-header task-header">
                 <span class="visual-header-badge task-badge">TASK</span>
                 <span class="visual-header-title">${escapeHtml(title)}</span>
@@ -531,12 +585,17 @@
                 if (hasJson) {
                     try {
                         let decoded = JSON.parse(jsonContent);
-                        let pretty = JSON.stringify(decoded, null, 2);
-                        html += `
-                        <details class="visual-json-details">
-                            <summary>View Response JSON</summary>
-                            <pre class="visual-json-pre">${escapeHtml(pretty)}</pre>
-                        </details>`;
+                        // If it has a "msg" key, extract and render it cleanly
+                        if (decoded.msg && typeof decoded.msg === 'string') {
+                            html += renderMsgPanel(decoded.msg);
+                        } else {
+                            let pretty = JSON.stringify(decoded, null, 2);
+                            html += `
+                            <details class="visual-json-details">
+                                <summary>View Response JSON</summary>
+                                <pre class="visual-json-pre">${escapeHtml(pretty)}</pre>
+                            </details>`;
+                        }
                     } catch {
                         html += `
                         <details class="visual-json-details">
@@ -550,14 +609,82 @@
             }
         }
 
-        // Match simple status reports that don't have json but match hostname: ok=...
+        // Match simple recap status reports (hostname : ok=N changed=N ...)
         if (cleanText.match(/^\s*\S+\s*:\s*ok=\d+\s+changed=\d+\s+/i)) {
             return `<div style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary); padding:4px 8px; background:var(--bg-surface); border-radius:3px; margin-bottom:4px; border-left:2px solid var(--accent)">${escapeHtml(cleanText)}</div>`;
+        }
+
+        // --- Suppress JSON scaffolding lines that wrap Ansible msg output ---
+        const trimmed = cleanText.trim();
+        if (trimmed === '{' || trimmed === '}' || trimmed === '},' ) return null;
+        if (/^"changed"\s*:\s*(true|false),?$/.test(trimmed)) return null;
+        if (/^"failed"\s*:\s*(true|false),?$/.test(trimmed)) return null;
+        if (/^"invocation"\s*:/.test(trimmed)) return null;
+
+        // Lines starting with "msg": — strip the key and render the value content
+        if (/^"msg"\s*:/.test(trimmed)) {
+            let inner = trimmed.replace(/^"msg"\s*:\s*"?/, '').replace(/",$/, '').replace(/"$/, '');
+            inner = inner.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+            return renderBoxLines(inner);
+        }
+
+        // Lines that are pure box-drawing report lines (║ prefix or ╔ ╚ ╠)
+        if (/^[║╔╠╚═╗╝]/.test(trimmed)) {
+            return renderBoxLines(cleanText);
         }
 
         // Default: regular line styling
         let typeClass = `ol-${lineType}`;
         return `<div class="${typeClass}" style="font-family:var(--font-mono); font-size:11px; padding: 2px 0;">${escapeHtml(cleanText)}</div>`;
+    }
+
+    /**
+     * Render a full msg string that may contain multi-line box-drawing output.
+     */
+    function renderMsgPanel(msg) {
+        const lines = msg.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        let rows = '';
+        let title = '';
+
+        lines.forEach(line => {
+            if (/^[╔╚╠╗╝═]+$/.test(line)) return;
+
+            let titleMatch = line.match(/^║\s{2}([A-Z][A-Z ]+[A-Z])\s*$/);
+            if (titleMatch) {
+                if (!title) title = titleMatch[1].trim();
+                return;
+            }
+
+            let sectionMatch = line.match(/^║\s+([A-Z][A-Z ]+)$/);
+            if (sectionMatch && !line.includes(':')) {
+                rows += `<div class="msg-section">${escapeHtml(sectionMatch[1].trim())}</div>`;
+                return;
+            }
+
+            let kvMatch = line.match(/^║\s{2}(.+?)\s{2,}:\s(.+)$/) || line.match(/^║\s+(.+?)\s*:\s+(.+)$/);
+            if (kvMatch) {
+                let key = kvMatch[1].trim();
+                let val = kvMatch[2].trim().replace(/^"+|"+$/g, '');
+                rows += `<div class="msg-row"><span class="msg-key">${escapeHtml(key)}</span><span class="msg-val">${escapeHtml(val)}</span></div>`;
+                return;
+            }
+        });
+
+        if (!rows) {
+            return `<pre class="visual-json-pre" style="margin-top:6px">${escapeHtml(msg)}</pre>`;
+        }
+
+        return `<div class="msg-panel">
+            ${title ? `<div class="msg-panel-title">${escapeHtml(title)}</div>` : ''}
+            <div class="msg-rows">${rows}</div>
+        </div>`;
+    }
+
+    /**
+     * Render a chunk of box-drawing lines (║ characters) as a clean panel.
+     */
+    function renderBoxLines(text) {
+        return renderMsgPanel(text);
     }
 
     function initVisualConsole() {
@@ -567,9 +694,10 @@
             const text = div.textContent;
             const type = div.className.replace('ol-', '');
             const html = formatLineToVisual(text, type);
+            if (!html) return; // suppressed line
             const wrapper = document.createElement('div');
             wrapper.innerHTML = html;
-            containerVisual.appendChild(wrapper.firstElementChild);
+            if (wrapper.firstElementChild) containerVisual.appendChild(wrapper.firstElementChild);
         });
         scrollBottom();
     }
@@ -584,9 +712,10 @@
 
             // Visual Append
             const html = formatLineToVisual(l.line, l.type);
+            if (!html) return; // suppressed line
             const wrapper = document.createElement('div');
             wrapper.innerHTML = html;
-            containerVisual.appendChild(wrapper.firstElementChild);
+            if (wrapper.firstElementChild) containerVisual.appendChild(wrapper.firstElementChild);
         });
         scrollBottom();
     }

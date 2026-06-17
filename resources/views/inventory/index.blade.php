@@ -71,7 +71,7 @@
                 </div>
             </div>
             <div id="inv-graph-container" style="min-height:400px;background:var(--bg-base);border-bottom:1px solid var(--border);position:relative;overflow:hidden">
-                <canvas id="inv-canvas" style="width:100%;height:400px"></canvas>
+                <svg id="inv-canvas" style="width:100%;height:400px;display:block"></svg>
             </div>
         </div>
 
@@ -126,6 +126,33 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    {{-- Hosts Tab --}}
+    <div id="tab-hosts" style="display:none">
+        <div class="card">
+            <div class="card-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                <span class="card-title">All Hosts</span>
+                <span class="text-mono text-xs text-muted" style="margin-left:auto" id="hosts-count"></span>
+            </div>
+            <table class="data-table" id="hosts-table">
+                <thead>
+                    <tr>
+                        <th style="width:20px"></th>
+                        <th>Hostname</th>
+                        <th>IP Address</th>
+                        <th>Groups</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="hosts-tbody">
+                    {{-- populated by JS --}}
+                </tbody>
+            </table>
         </div>
     </div>
 
@@ -210,8 +237,9 @@
 // ── Tab switching ──
 function switchTab(name, el) {
     event.preventDefault();
-    ['graph','adhoc','editor'].forEach(t => {
-        document.getElementById(`tab-${t}`).style.display = t === name ? 'block' : 'none';
+    ['graph','hosts','adhoc','editor'].forEach(t => {
+        const el2 = document.getElementById(`tab-${t}`);
+        if (el2) el2.style.display = t === name ? 'block' : 'none';
     });
     document.querySelectorAll('.page-tab').forEach(a => a.classList.remove('active'));
     el.classList.add('active');
@@ -306,20 +334,51 @@ async function showHostFacts(host) {
 
 // ── Ping all ──
 async function pingAll() {
-    const r = await api('/inventory/ping', {
-        method: 'POST',
-        body: JSON.stringify({ pattern: 'all' })
-    });
+    const btn = document.querySelector('[onclick="pingAll()"]');
+    const origHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:11px;height:11px"></span> Pinging…'; }
 
-    if (r.parsed) {
-        Object.entries(r.parsed).forEach(([host, status]) => {
-            const dot = document.getElementById(`ping-${host}`);
-            if (dot) {
-                dot.style.background = status === 'success' ? 'var(--green)' : 'var(--red)';
-                if (status === 'success') dot.style.boxShadow = '0 0 4px var(--green)';
-            }
+    try {
+        const r = await api('/inventory/ping', {
+            method: 'POST',
+            body: JSON.stringify({ pattern: 'all' })
         });
+
+        if (r.error) {
+            showToast('Ping failed: ' + r.error, 'error');
+            return;
+        }
+
+        if (r.parsed) {
+            Object.entries(r.parsed).forEach(([host, status]) => {
+                // Update all dots with this host id (graph grid + hosts table)
+                document.querySelectorAll(`[id="ping-${host}"]`).forEach(dot => {
+                    dot.style.background = status === 'success' ? 'var(--green)' : 'var(--red)';
+                    dot.style.boxShadow  = status === 'success' ? '0 0 4px var(--green)' : '0 0 4px var(--red)';
+                });
+                // Update status cell in hosts table
+                const statusCell = document.getElementById(`status-${host}`);
+                if (statusCell) {
+                    statusCell.innerHTML = status === 'success'
+                        ? '<span class="badge badge-success">Online</span>'
+                        : '<span class="badge badge-failed">Offline</span>';
+                }
+            });
+            showToast(`Pinged ${Object.keys(r.parsed).length} host(s)`, 'success');
+        }
+    } catch(e) {
+        showToast('Ping request failed', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
     }
+}
+
+function showToast(msg, type) {
+    const t = document.createElement('div');
+    t.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:9999;padding:10px 18px;border-radius:6px;font-family:var(--font-mono);font-size:12px;color:#fff;background:${type==='error'?'var(--red)':'var(--green)'};box-shadow:0 4px 20px rgba(0,0,0,.4);transition:opacity .4s`;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 3000);
 }
 
 function filterGraph(q) {

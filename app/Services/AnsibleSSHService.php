@@ -16,6 +16,7 @@ class AnsibleSSHService
     protected string $user;
     protected ?string $keyPath;
     protected ?string $password;
+    protected ?string $workingDir;
 
     public function __construct()
     {
@@ -24,6 +25,7 @@ class AnsibleSSHService
         $this->user    = config('ansible.ssh.user');
         $this->keyPath = config('ansible.ssh.key_path');
         $this->password = config('ansible.ssh.password');
+        $this->workingDir = config('ansible.working_dir');
     }
 
     public function connect(): self
@@ -53,6 +55,26 @@ class AnsibleSSHService
     }
 
     /**
+     * Prepare command by prepending directory navigation and environment configuration.
+     *
+     * Ansible requires a UTF-8 locale and the correct config path. When the dashboard
+     * SSHes into the ansible_control container as user 'paul', the shell is non-interactive
+     * and strips the container's environment variables. We always prepend them explicitly.
+     */
+    protected function prepareCommand(string $command): string
+    {
+        $prefix = 'export LC_ALL=C.UTF-8';
+
+        if ($this->workingDir) {
+            $configPath = rtrim($this->workingDir, '/') . '/ansible.cfg';
+            $prefix .= ' && cd ' . escapeshellarg($this->workingDir)
+                . ' && export ANSIBLE_CONFIG=' . escapeshellarg($configPath);
+        }
+
+        return $prefix . ' && ' . $command;
+    }
+
+    /**
      * Execute a command and return full output string.
      */
     public function exec(string $command, ?int $userId = null): array
@@ -61,8 +83,10 @@ class AnsibleSSHService
             $this->connect();
         }
 
+        $preparedCommand = $this->prepareCommand($command);
+
         $start = microtime(true);
-        $output = $this->connection->exec($command);
+        $output = $this->connection->exec($preparedCommand);
         $exitCode = $this->connection->getExitStatus();
         $duration = round((microtime(true) - $start) * 1000);
 
@@ -92,7 +116,9 @@ class AnsibleSSHService
 
         $this->connection->setTimeout(0);
 
-        $this->connection->exec($command, function ($chunk) use ($onOutput) {
+        $preparedCommand = $this->prepareCommand($command);
+
+        $this->connection->exec($preparedCommand, function ($chunk) use ($onOutput) {
             $onOutput($chunk);
         });
 

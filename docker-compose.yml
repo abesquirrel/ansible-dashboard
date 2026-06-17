@@ -28,7 +28,10 @@ services:
       dockerfile: docker/Dockerfile
     container_name: ansible-ctrl-worker
     restart: unless-stopped
-    command: php artisan queue:work redis --sleep=3 --tries=1 --timeout=3600 --queue=default
+    # --max-time=3600: worker exits after 1 hour, Docker restart policy relaunches it.
+    # This guarantees code changes are picked up automatically without manual restarts.
+    # --tries=1: no retries on failed jobs (Ansible failures are surfaced immediately).
+    command: php artisan queue:work redis --sleep=3 --tries=1 --timeout=3600 --max-time=3600 --queue=default
     volumes:
       - .:/var/www/html
       - ${ANSIBLE_SSH_KEY_PATH_HOST:-~/.ssh/id_ed25519}:/home/www-data/.ssh/ansible_rsa:ro

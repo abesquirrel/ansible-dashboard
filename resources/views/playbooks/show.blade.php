@@ -515,6 +515,7 @@
     let lastId = {{ $job->outputLines->last()?->id ?? 0 }};
     let polling = isRunning;
     let isRawMode = false;
+    let currentJsonBlock = null;
 
     function scrollBottom() {
         containerRaw.scrollTop = containerRaw.scrollHeight;
@@ -525,9 +526,77 @@
         return String(string).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    function renderHostBlock(host, statusLabel, badgeClass, jsonContent, itemName = '') {
+        let html = `<div class="visual-host-line">
+            <div class="visual-host-line-header">
+                <span class="badge ${badgeClass}">${statusLabel}</span>
+                <strong class="host-name">${escapeHtml(host)}${itemName ? ` <span class="text-muted" style="font-size:11px; font-weight:normal; margin-left:4px;">(item=${escapeHtml(itemName)})</span>` : ''}</strong>
+            </div>`;
+
+        if (jsonContent) {
+            try {
+                let decoded = JSON.parse(jsonContent);
+                let msgStr = '';
+                if (decoded.msg) {
+                    if (typeof decoded.msg === 'string') {
+                        msgStr = decoded.msg;
+                    } else if (Array.isArray(decoded.msg)) {
+                        msgStr = decoded.msg.map(item => {
+                            if (Array.isArray(item)) {
+                                return item.join('\n');
+                            }
+                            return String(item);
+                        }).join('\n');
+                    } else {
+                        msgStr = JSON.stringify(decoded.msg, null, 2);
+                    }
+                }
+
+                if (msgStr) {
+                    html += renderMsgPanel(msgStr);
+                } else {
+                    let pretty = JSON.stringify(decoded, null, 2);
+                    html += `
+                    <details class="visual-json-details">
+                        <summary>View Response JSON</summary>
+                        <pre class="visual-json-pre">${escapeHtml(pretty)}</pre>
+                    </details>`;
+                }
+            } catch {
+                html += `
+                <details class="visual-json-details">
+                    <summary>View Response Data</summary>
+                    <pre class="visual-json-pre">${escapeHtml(jsonContent)}</pre>
+                </details>`;
+            }
+        }
+        html += `</div>`;
+        return html;
+    }
+
     function formatLineToVisual(lineText, lineType) {
         let cleanText = lineText.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
         
+        if (currentJsonBlock) {
+            currentJsonBlock.lines.push(cleanText);
+            
+            let openBraces = (cleanText.match(/\{/g) || []).length;
+            let closeBraces = (cleanText.match(/\}/g) || []).length;
+            currentJsonBlock.braceCount += openBraces - closeBraces;
+            
+            if (currentJsonBlock.braceCount <= 0) {
+                let completeJson = currentJsonBlock.lines.join('\n');
+                let host = currentJsonBlock.host;
+                let statusLabel = currentJsonBlock.statusLabel;
+                let badgeClass = currentJsonBlock.badgeClass;
+                let itemName = currentJsonBlock.itemName;
+                
+                currentJsonBlock = null;
+                return renderHostBlock(host, statusLabel, badgeClass, completeJson, itemName);
+            }
+            return null;
+        }
+
         // Match PLAY header
         if (cleanText.includes('PLAY [')) {
             let match = cleanText.match(/PLAY\s+\[(.*)\]\s*[\*\s]*$/i)
@@ -560,13 +629,14 @@
 
         // Match host status block (ok: [host] => { ... })
         if (cleanText.match(/^(ok|changed|fatal|failed|skipping):\s+\[([^\]]+)\]/i)) {
-            let match = cleanText.match(/^(ok|changed|fatal|failed|skipping):\s+\[([^\]]+)\](?:\s*:\s*(UNREACHABLE|FAILED)!)?\s*(=>\s*(\{[\s\S]*\}))?/i);
+            let match = cleanText.match(/^(ok|changed|fatal|failed|skipping):\s+\[([^\]]+)\](?:\s*:\s*(UNREACHABLE|FAILED)!)?(?:\s*=>\s*\(item=(.*?)\))?\s*(=>\s*(\{[\s\S]*))?$/i);
             if (match) {
                 let status = match[1].toLowerCase();
                 let host = match[2];
                 let errorType = match[3] ?? '';
-                let hasJson = !!match[4];
-                let jsonContent = match[5] ?? '';
+                let itemName = match[4] ?? '';
+                let hasJson = !!match[5];
+                let jsonStart = match[5] ? match[5].substring(match[5].indexOf('{')) : '';
 
                 let badgeClass = 'badge-success';
                 if (status === 'changed') badgeClass = 'badge-running';
@@ -576,36 +646,29 @@
                 let statusLabel = status.toUpperCase();
                 if (errorType) statusLabel += ` : ${errorType}`;
 
-                let html = `<div class="visual-host-line">
-                    <div class="visual-host-line-header">
-                        <span class="badge ${badgeClass}">${statusLabel}</span>
-                        <strong class="host-name">${escapeHtml(host)}</strong>
-                    </div>`;
-
                 if (hasJson) {
-                    try {
-                        let decoded = JSON.parse(jsonContent);
-                        // If it has a "msg" key, extract and render it cleanly
-                        if (decoded.msg && typeof decoded.msg === 'string') {
-                            html += renderMsgPanel(decoded.msg);
-                        } else {
-                            let pretty = JSON.stringify(decoded, null, 2);
-                            html += `
-                            <details class="visual-json-details">
-                                <summary>View Response JSON</summary>
-                                <pre class="visual-json-pre">${escapeHtml(pretty)}</pre>
-                            </details>`;
-                        }
-                    } catch {
-                        html += `
-                        <details class="visual-json-details">
-                            <summary>View Response Data</summary>
-                            <pre class="visual-json-pre">${escapeHtml(jsonContent)}</pre>
-                        </details>`;
+                    let openBraces = (jsonStart.match(/\{/g) || []).length;
+                    let closeBraces = (jsonStart.match(/\}/g) || []).length;
+                    let braceCount = openBraces - closeBraces;
+
+                    if (braceCount > 0) {
+                        currentJsonBlock = {
+                            host: host,
+                            status: status,
+                            errorType: errorType,
+                            itemName: itemName,
+                            badgeClass: badgeClass,
+                            statusLabel: statusLabel,
+                            lines: [jsonStart],
+                            braceCount: braceCount
+                        };
+                        return null; // Suppress line, wait for completion
+                    } else {
+                        return renderHostBlock(host, statusLabel, badgeClass, jsonStart, itemName);
                     }
+                } else {
+                    return renderHostBlock(host, statusLabel, badgeClass, null, itemName);
                 }
-                html += `</div>`;
-                return html;
             }
         }
 
@@ -689,6 +752,7 @@
 
     function initVisualConsole() {
         containerVisual.innerHTML = '';
+        currentJsonBlock = null;
         const rawDivs = containerRaw.querySelectorAll('div');
         rawDivs.forEach(div => {
             const text = div.textContent;

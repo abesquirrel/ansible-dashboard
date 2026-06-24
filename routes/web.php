@@ -9,6 +9,7 @@ use App\Http\Controllers\{
     LogController,
     SettingsController,
     LearningController,
+    UserController,
 };
 
 // Auth routes
@@ -50,6 +51,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/adhoc',        [InventoryController::class, 'adHoc'])->name('adhoc');
         Route::get('/file',          [InventoryController::class, 'getFile'])->name('file.get');
         Route::post('/file',         [InventoryController::class, 'saveFile'])->name('file.save');
+        Route::get('/files',         [InventoryController::class, 'listFiles'])->name('files.list');
+        Route::post('/file/validate',[InventoryController::class, 'validateFile'])->name('file.validate');
     });
 
     // Terminal
@@ -72,5 +75,16 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/env',          [SettingsController::class, 'updateEnv'])->name('env');
         Route::post('/export',       [SettingsController::class, 'exportConfig'])->name('export');
         Route::post('/import',       [SettingsController::class, 'importConfig'])->name('import');
+    });
+
+    // Users (admin only)
+    Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
+        Route::get('/users',             [UserController::class, 'index'])->name('users.index');
+        Route::get('/users/create',      [UserController::class, 'create'])->name('users.create');
+        Route::post('/users',            [UserController::class, 'store'])->name('users.store');
+        Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
+        Route::put('/users/{user}',      [UserController::class, 'update'])->name('users.update');
+        Route::delete('/users/{user}',   [UserController::class, 'destroy'])->name('users.destroy');
+        Route::post('/users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
     });
 });

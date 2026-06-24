@@ -119,4 +119,56 @@ class PlaybookTest extends TestCase
         $response->assertJsonPath('status', 'aborted');
         $this->assertEquals('aborted', $job->fresh()->status);
     }
+
+    public function test_can_view_job_detail_with_array_msg()
+    {
+        $job = PlaybookJob::create([
+            'user_id' => $this->user->id,
+            'playbook' => '/etc/ansible/playbooks/site.yml',
+            'inventory' => '/etc/ansible/hosts',
+            'command' => 'ansible-playbook -i /etc/ansible/hosts /etc/ansible/playbooks/site.yml',
+            'status' => 'success',
+        ]);
+
+        JobOutputLine::create([
+            'job_id' => $job->id,
+            'line' => 'ok: [host-arr.example.com] => {',
+            'type' => 'ok',
+        ]);
+        JobOutputLine::create([
+            'job_id' => $job->id,
+            'line' => '    "changed": false,',
+            'type' => 'output',
+        ]);
+        JobOutputLine::create([
+            'job_id' => $job->id,
+            'line' => '    "msg": [',
+            'type' => 'output',
+        ]);
+        JobOutputLine::create([
+            'job_id' => $job->id,
+            'line' => '        "line one",',
+            'type' => 'output',
+        ]);
+        JobOutputLine::create([
+            'job_id' => $job->id,
+            'line' => '        "line two"',
+            'type' => 'output',
+        ]);
+        JobOutputLine::create([
+            'job_id' => $job->id,
+            'line' => '    ]',
+            'type' => 'output',
+        ]);
+        JobOutputLine::create([
+            'job_id' => $job->id,
+            'line' => '}',
+            'type' => 'output',
+        ]);
+
+        $response = $this->actingAs($this->user)->get("/jobs/{$job->id}");
+
+        $response->assertStatus(200);
+        $response->assertSee('host-arr.example.com');
+    }
 }

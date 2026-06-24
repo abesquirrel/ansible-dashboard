@@ -100,4 +100,26 @@ class AnsibleServiceTest extends TestCase
         $this->assertEquals(2, $summary['hosts_failed']);
         $this->assertEquals(0, $summary['hosts_skipped']);
     }
+
+    public function test_ansible_service_input_validation()
+    {
+        $sshMock = $this->createMock(AnsibleSSHService::class);
+        $service = new AnsibleService($sshMock);
+
+        $sshMock->method('exec')->willReturn(['exit_code' => 0, 'output' => '{}']);
+
+        $service->getHostFacts('host1.example.com');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $service->getHostFacts('host1; rm -rf /');
+    }
+
+    public function test_ansible_service_pattern_validation()
+    {
+        $sshMock = $this->createMock(AnsibleSSHService::class);
+        $service = new AnsibleService($sshMock);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $service->pingHosts('all; cat /etc/passwd');
+    }
 }

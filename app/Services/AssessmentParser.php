@@ -62,7 +62,11 @@ class AssessmentParser
                         $errorMsg = $decoded['msg']
                             ?? $decoded['stderr']
                             ?? $decoded['module_stdout']
-                            ?? json_encode($decoded);
+                            ?? $decoded;
+
+                        if (!is_string($errorMsg)) {
+                            $errorMsg = is_array($errorMsg) ? json_encode($errorMsg) : (string)$errorMsg;
+                        }
 
                         $hosts[$host] = [
                             'name'   => $host,
@@ -79,6 +83,9 @@ class AssessmentParser
                 if (!isset($decoded['msg'])) continue;
 
                 $msg = $decoded['msg'];
+                if (!is_string($msg)) {
+                    $msg = is_array($msg) ? json_encode($msg) : (string)$msg;
+                }
 
                 if (str_contains($msg, 'HOST STATUS SUMMARY')) {
                     $hosts[$host] = [

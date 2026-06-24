@@ -21,12 +21,15 @@
 
     - name: 1.1 Check if custom ssh_config exists
       ansible.builtin.stat:
-        path: "{{ playbook_dir }}/ssh_config"
-      register: ssh_config_stat
+        path: "{{ item }}"
+      register: ssh_config_stats
+      loop:
+        - "/ansible/ssh_config"
+        - "{{ playbook_dir }}/ssh_config"
 
     - name: 1.2 Set ssh_config argument
       ansible.builtin.set_fact:
-        ssh_config_arg: "{{ '-F ' ~ playbook_dir ~ '/ssh_config' if ssh_config_stat.stat.exists else '' }}"
+        ssh_config_arg: "{{ '-F ' ~ (ssh_config_stats.results | selectattr('stat.exists') | map(attribute='item') | first) if (ssh_config_stats.results | selectattr('stat.exists') | list | length > 0) else '' }}"
 
     - name: 2. Perform DNS Lookup
       ansible.builtin.command: "getent hosts {{ target_host }}"
@@ -62,24 +65,36 @@
           - "The host might be offline, blocked by firewall, or ICMP echo request is disabled."
       when: ping_result.rc != 0
 
-    - name: 4. Check TCP Port 22 (SSH Transport Layer Check)
+    - name: 4. Check TCP Port 22 (SSH Transport Layer Check) via Proxy
+      ansible.builtin.command: "ssh {{ ssh_config_arg }} -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no {{ target_user }}@{{ target_host }} true"
+      register: port_check_ssh
+      when: ssh_config_arg != ""
+      failed_when: not suppress_fatal_logs | bool and not (port_check_ssh.rc == 0 or 'Permission denied' in (port_check_ssh.stderr | default('')))
+      ignore_errors: true
+
+    - name: 4. Check TCP Port 22 (SSH Transport Layer Check) Direct
       ansible.builtin.wait_for:
         host: "{{ target_host }}"
         port: 22
         state: started
         timeout: 5
-      register: port_check
-      # Suppress fatal log if configured by setting failed_when to false
-      failed_when: "{{ false if suppress_fatal_logs | bool else 'port_check is failed' }}"
+      register: port_check_direct
+      when: ssh_config_arg == ""
+      failed_when: not suppress_fatal_logs | bool and port_check_direct.failed | default(false) | bool
       ignore_errors: true
 
     - name: 4.1 Evaluate Port check result
       ansible.builtin.set_fact:
-        port_check_successful: "{{ not port_check.failed | bool }}"
+        port_check_successful: >-
+          {{
+            (ssh_config_arg != "" and (port_check_ssh.rc == 0 or 'Permission denied' in (port_check_ssh.stderr | default(''))))
+            or
+            (ssh_config_arg == "" and not (port_check_direct.failed | default(false) | bool))
+          }}
 
     - name: DEBUG
       ansible.builtin.debug:
-        msg: "DEBUG: port_check.failed={{ port_check.failed }}, port_check_successful={{ port_check_successful }}, skip_ssh_on_port_fail={{ skip_ssh_on_port_fail | bool }}"
+        msg: "DEBUG: port_check_successful={{ port_check_successful }}, skip_ssh_on_port_fail={{ skip_ssh_on_port_fail | bool }}"
 
     - name: Print Port 22 status
       ansible.builtin.debug:
@@ -89,7 +104,7 @@
     - name: Print Port 22 failure warning
       ansible.builtin.debug:
         msg:
-          - "WARNING: Direct TCP Port 22 connection failed for {{ target_host }}."
+          - "WARNING: TCP Port 22 connection failed for {{ target_host }}."
       when: not port_check_successful | bool
 
     - name: 5. Attempt Verbose SSH Handshake (SSH Connection Check)

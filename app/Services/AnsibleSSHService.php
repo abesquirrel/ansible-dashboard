@@ -7,6 +7,7 @@ use phpseclib3\Crypt\PublicKeyLoader;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use App\Models\AuditLog;
+use Illuminate\Support\Facades\Auth;
 
 class AnsibleSSHService
 {
@@ -163,43 +164,111 @@ class AnsibleSSHService
     }
 
     /**
-     * Upload a file via SFTP.
+     * Get SFTP connection.
      */
-    public function uploadFile(string $localPath, string $remotePath): bool
+    protected function getSftp(): \phpseclib3\Net\SFTP
     {
-        if (!$this->isConnected()) {
-            $this->connect();
-        }
-
         $sftp = new \phpseclib3\Net\SFTP($this->host, $this->port);
+        $sftp->setTimeout(30);
+
         if ($this->keyPath && file_exists($this->keyPath)) {
             $key = PublicKeyLoader::load(file_get_contents($this->keyPath));
-            $sftp->login($this->user, $key);
+            if (!$sftp->login($this->user, $key)) {
+                throw new \RuntimeException("SFTP key auth failed for {$this->user}@{$this->host}");
+            }
+        } elseif ($this->password) {
+            if (!$sftp->login($this->user, $this->password)) {
+                throw new \RuntimeException("SFTP password auth failed for {$this->user}@{$this->host}");
+            }
         } else {
-            $sftp->login($this->user, $this->password);
+            throw new \RuntimeException('No SFTP credentials configured.');
         }
 
-        return $sftp->put($remotePath, $localPath, \phpseclib3\Net\SFTP::SOURCE_LOCAL_FILE);
+        return $sftp;
+    }
+
+    /**
+     * List remote directory files and folders.
+     */
+    public function listRemoteDir(string $path): array
+    {
+        $sftp = $this->getSftp();
+        $raw = $sftp->rawlist($path);
+        if ($raw === false) {
+            return [];
+        }
+
+        $results = [];
+        foreach ($raw as $name => $info) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            $type = 'file';
+            if (isset($info['type'])) {
+                // In phpseclib3 type 2 is directory
+                if ($info['type'] === 2) {
+                    $type = 'dir';
+                }
+            }
+            $results[] = [
+                'name' => $name,
+                'path' => rtrim($path, '/') . '/' . $name,
+                'type' => $type,
+                'size' => $info['size'] ?? 0,
+            ];
+        }
+
+        // Sort: directories first, then files alphabetically
+        usort($results, function ($a, $b) {
+            if ($a['type'] !== $b['type']) {
+                return $a['type'] === 'dir' ? -1 : 1;
+            }
+            return strcasecmp($a['name'], $b['name']);
+        });
+
+        return $results;
+    }
+
+    /**
+     * Upload a file via SFTP.
+     */
+    public function uploadFile(string $localPath, string $remotePath, ?int $userId = null): bool
+    {
+        $start = microtime(true);
+        $sftp = $this->getSftp();
+        $ok = $sftp->put($remotePath, $localPath, \phpseclib3\Net\SFTP::SOURCE_LOCAL_FILE);
+        $duration = round((microtime(true) - $start) * 1000);
+
+        AuditLog::create([
+            'user_id'   => $userId ?: Auth::id(),
+            'command'   => "SFTP WRITE: {$remotePath}",
+            'exit_code' => $ok ? 0 : 1,
+            'duration_ms' => $duration,
+            'source'    => 'sftp_write',
+        ]);
+
+        return $ok;
     }
 
     /**
      * Download a remote file content.
      */
-    public function readRemoteFile(string $remotePath): string
+    public function readRemoteFile(string $remotePath, ?int $userId = null): string
     {
-        if (!$this->isConnected()) {
-            $this->connect();
-        }
+        $start = microtime(true);
+        $sftp = $this->getSftp();
+        $content = $sftp->get($remotePath);
+        $duration = round((microtime(true) - $start) * 1000);
 
-        $sftp = new \phpseclib3\Net\SFTP($this->host, $this->port);
-        if ($this->keyPath && file_exists($this->keyPath)) {
-            $key = PublicKeyLoader::load(file_get_contents($this->keyPath));
-            $sftp->login($this->user, $key);
-        } else {
-            $sftp->login($this->user, $this->password);
-        }
+        AuditLog::create([
+            'user_id'   => $userId ?: Auth::id(),
+            'command'   => "SFTP READ: {$remotePath}",
+            'exit_code' => $content !== false ? 0 : 1,
+            'duration_ms' => $duration,
+            'source'    => 'sftp_read',
+        ]);
 
-        return $sftp->get($remotePath) ?: '';
+        return $content !== false ? $content : '';
     }
 
     public function disconnect(): void

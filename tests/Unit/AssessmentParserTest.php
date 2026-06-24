@@ -267,4 +267,76 @@ class AssessmentParserTest extends TestCase
         $this->assertEquals('error', $host['type']);
         $this->assertEquals('Host was unreachable during execution.', $host['error']);
     }
+
+    public function test_parse_non_string_msg_success()
+    {
+        $job = PlaybookJob::create([
+            'user_id' => $this->user->id,
+            'playbook' => '/ansible/site.yml',
+            'inventory' => '/ansible/hosts',
+            'command' => 'ansible-playbook site.yml',
+            'status' => 'success',
+        ]);
+
+        $lines = [
+            ['type' => 'ok', 'line' => 'ok: [host-arr.example.com] => {'],
+            ['type' => 'output', 'line' => '    "changed": false,'],
+            ['type' => 'output', 'line' => '    "msg": ['],
+            ['type' => 'output', 'line' => '        "line one",'],
+            ['type' => 'output', 'line' => '        "line two"'],
+            ['type' => 'output', 'line' => '    ]'],
+            ['type' => 'output', 'line' => '}'],
+        ];
+
+        foreach ($lines as $l) {
+            JobOutputLine::create([
+                'job_id' => $job->id,
+                'line' => $l['line'],
+                'type' => $l['type'],
+            ]);
+        }
+
+        $assessment = AssessmentParser::parse($job);
+
+        // It should parse correctly and not crash
+        $this->assertFalse($assessment['has_assessments']);
+    }
+
+    public function test_parse_non_string_msg_error()
+    {
+        $job = PlaybookJob::create([
+            'user_id' => $this->user->id,
+            'playbook' => '/ansible/site.yml',
+            'inventory' => '/ansible/hosts',
+            'command' => 'ansible-playbook site.yml',
+            'status' => 'failed',
+        ]);
+
+        $lines = [
+            ['type' => 'error', 'line' => 'fatal: [host-arr.example.com]: FAILED! => {'],
+            ['type' => 'output', 'line' => '    "changed": false,'],
+            ['type' => 'output', 'line' => '    "msg": ['],
+            ['type' => 'output', 'line' => '        "error line one",'],
+            ['type' => 'output', 'line' => '        "error line two"'],
+            ['type' => 'output', 'line' => '    ]'],
+            ['type' => 'output', 'line' => '}'],
+        ];
+
+        foreach ($lines as $l) {
+            JobOutputLine::create([
+                'job_id' => $job->id,
+                'line' => $l['line'],
+                'type' => $l['type'],
+            ]);
+        }
+
+        $assessment = AssessmentParser::parse($job);
+
+        $this->assertTrue($assessment['has_assessments']);
+        $this->assertArrayHasKey('host-arr.example.com', $assessment['hosts']);
+        $host = $assessment['hosts']['host-arr.example.com'];
+        $this->assertEquals('failed', $host['status']);
+        $this->assertStringContainsString('error line one', $host['error']);
+        $this->assertStringContainsString('error line two', $host['error']);
+    }
 }

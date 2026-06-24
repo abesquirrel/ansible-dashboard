@@ -78,6 +78,17 @@ CTRL enforces Role-Based Access Control (RBAC) to ensure that users only perform
 | **Operator** | Can view playbooks, launch playbooks, view inventory topology, and use the SSH terminal (with command execution restrictions). Cannot change settings. | Operations Teams, Deployment Staff |
 | **Viewer** | Read-only access. Can view the dashboard, check playbook histories, and see inventory layouts. Cannot run playbooks, execute ad-hoc commands, edit files, or open terminals. | Project Managers, QA, Auditors |
 
+### User Management Panel (Admins Only)
+Administrators can manage the platform's user base directly from the **Users** section on the sidebar. This includes:
+* **User CRUD**: Registering new accounts, modifying existing profiles (name, email, role), and deleting users.
+* **Optional Password Updates**: Modifying a user's password without requiring password changes during basic profile updates.
+* **Inline Status Toggles**: Instantly activating/deactivating a user's account using an AJAX-based toggle in the list view.
+* **Safety Lockouts**: To prevent accidental self-lockouts:
+  - Administrators are blocked from deleting their own accounts.
+  - Administrators are blocked from deactivating their own accounts.
+  - Administrators are blocked from changing their own role (demoting themselves from Admin).
+  - These restrictions are enforced at both the UI and controller levels.
+
 ### Default Credentials
 On database initialization, the default administrator account is seeded:
 * **Email**: `admin@localhost`
@@ -261,3 +272,25 @@ Every action taken on the dashboard is audited for security compliance.
   docker compose exec app php artisan config:clear
   docker compose exec app php artisan cache:clear
   ```
+
+### Q: Why does the facts modal display pretty printed JSON or organized tables?
+* **A**: The facts retrieval modal has been updated to organize facts into a readable list of key system metrics (Uptime, CPU, RAM, OS, SSH/Ping) under a "Summary" tab, with the full raw data pretty-printed under a "Raw JSON" tab.
+
+### Q: Why did the job details page throw a 500 error previously?
+* **A**: If a playbook task returned a dictionary or list in its `msg` or error logs, the internal `AssessmentParser` failed due to type constraints (expecting a string haystack for `str_contains`). The parser has been patched to auto-encode non-string messages/errors to JSON strings, preventing exceptions.
+
+### Q: CodeMirror editor was not loading properly, giving Alpine/CodeMirror compartment errors.
+* **A**: The bundled CodeMirror script has been adjusted to execute as an IIFE export object, preventing global scope collisions and ensuring `new CodeMirror.Compartment()` correctly instantiates.
+
+---
+
+## 10. Security Architecture & Input Hardening
+
+To ensure complete platform safety, CTRL applies strict security filters to all actions that interact with the Ansible Control Node:
+1. **Shell Argument Escaping**: All dynamically interpolated parameters (e.g. inventory files, playbooks, hostnames, ad-hoc module arguments) are passed through PHP's `escapeshellarg()` function, neutralising special shell control characters (`;`, `&`, `|`, `` ` ``, `$`).
+2. **Regex Validation**:
+   - Hostnames and facts collection are constrained to `/^[a-zA-Z0-9\.\-_]+$/`.
+   - Ping patterns are restricted to `/^[a-zA-Z0-9\.\-_:,\*\[\]]+$/`.
+   - Any payload failing these regular expression validations is rejected with an `InvalidArgumentException` before shell execution.
+3. **Directory Traversal Prevention**: SFTP operations validate paths against allowed workspace directories (`ANSIBLE_WORKING_DIR`, `ANSIBLE_PLAYBOOKS_DIR`, `ANSIBLE_INVENTORY_DEFAULT`) and explicitly block any paths containing directory traversal segments (`..`).
+4. **Command Filters**: Direct terminal sessions block destructive command patterns (like `rm -rf /`, `mkfs`, etc.) for non-admin accounts to provide basic operational guardrails.

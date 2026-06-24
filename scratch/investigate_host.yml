@@ -1,0 +1,82 @@
+---
+- name: Unresponsive Host Diagnostic Playbook
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    # Pass target_host at runtime: -e target_host=your.host.name
+    target_host: ""
+    target_user: "ansible"
+
+  tasks:
+    - name: 1. Verify target_host parameter is provided
+      ansible.builtin.fail:
+        msg: "Please provide a target_host variable, e.g. -e target_host=example.com"
+      when: target_host is not defined or target_host == ""
+
+    - name: 2. Perform DNS Lookup
+      ansible.builtin.command: "getent hosts {{ target_host }}"
+      register: dns_result
+      ignore_errors: true
+
+    - name: Print DNS result
+      ansible.builtin.debug:
+        msg: "DNS lookup for {{ target_host }} returned: {{ dns_result.stdout }}"
+      when: dns_result.rc == 0
+
+    - name: Print DNS failure warning
+      ansible.builtin.debug:
+        msg: "WARNING: DNS lookup failed for {{ target_host }}. Check if the hostname is correct and DNS resolver is active."
+      when: dns_result.rc != 0
+
+    - name: 3. Perform ICMP Ping (Network Layer Check)
+      ansible.builtin.command: "ping -c 4 -W 2 {{ target_host }}"
+      register: ping_result
+      ignore_errors: true
+
+    - name: Print Ping result
+      ansible.builtin.debug:
+        msg:
+          - "Ping succeeded!"
+          - "{{ ping_result.stdout_lines }}"
+      when: ping_result.rc == 0
+
+    - name: Print Ping failure warning
+      ansible.builtin.debug:
+        msg:
+          - "WARNING: ICMP ping failed for {{ target_host }}."
+          - "The host might be offline, blocked by firewall, or ICMP echo request is disabled."
+          - "Errors: {{ ping_result.stderr | default('') }} {{ ping_result.stdout | default('') }}"
+      when: ping_result.rc != 0
+
+    - name: 4. Check TCP Port 22 (SSH Transport Layer Check)
+      ansible.builtin.wait_for:
+        host: "{{ target_host }}"
+        port: 22
+        state: started
+        timeout: 5
+      register: port_check
+      ignore_errors: true
+
+    - name: Print Port 22 status
+      ansible.builtin.debug:
+        msg: "SSH Port 22 is OPEN and responding on {{ target_host }}"
+      when: port_check is succeeded
+
+    - name: Print Port 22 failure warning
+      ansible.builtin.debug:
+        msg: "WARNING: SSH Port 22 is CLOSED or unreachable on {{ target_host }}. Check local firewalls or SSH service status on the destination host."
+      when: port_check is failed
+
+    - name: 5. Attempt Verbose SSH Handshake (SSH Connection Check)
+      ansible.builtin.command: "ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -v {{ target_user }}@{{ target_host }} 'echo reachability_test'"
+      register: ssh_result
+      ignore_errors: true
+
+    - name: Print SSH Handshake details
+      ansible.builtin.debug:
+        msg:
+          - "SSH Handshake stdout: {{ ssh_result.stdout }}"
+          - "SSH Handshake stderr (debug logs):"
+          - "{{ ssh_result.stderr.split('\n') | select('match', '.*(debug|Failed|Connection|auth|key|identity).*') | list }}"
+      when: ssh_result.stderr is defined

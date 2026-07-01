@@ -19,6 +19,7 @@ services:
       - redis
     networks:
       - ctrl-net
+      - ansible-lab_default
     ports:
       - "8000:80"
 
@@ -40,6 +41,7 @@ services:
       - redis
     networks:
       - ctrl-net
+      - ansible-lab_default
 
   scheduler:
     build:
@@ -55,6 +57,7 @@ services:
       - redis
     networks:
       - ctrl-net
+      - ansible-lab_default
 
   reverb:
     build:
@@ -71,6 +74,7 @@ services:
       - "8081:8080"
     networks:
       - ctrl-net
+      - ansible-lab_default
 
   db:
     image: mariadb:11.2
@@ -85,6 +89,7 @@ services:
       - db-data:/var/lib/mysql
     networks:
       - ctrl-net
+      - ansible-lab_default
 
   redis:
     image: redis:7-alpine
@@ -95,6 +100,7 @@ services:
       - redis-data:/data
     networks:
       - ctrl-net
+      - ansible-lab_default
 
 volumes:
   db-data:
@@ -103,3 +109,5 @@ volumes:
 networks:
   ctrl-net:
     driver: bridge
+  ansible-lab_default:
+    external: true
